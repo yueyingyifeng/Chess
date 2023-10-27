@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import Item from "./menu_RoomList_Item.vue";
 
-let items = [
-    1,2,3,4
-]
+let props = defineProps({
+  items:Array
+})
 
 </script>
 

@@ -11,7 +11,6 @@ let onGame = ref(false);
   <div>
       <Menu></Menu>
       <Game v-show="onGame"></Game>
-
   </div>
 </template>
 
