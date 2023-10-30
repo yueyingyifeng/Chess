@@ -3,6 +3,7 @@ import { reactive,onMounted,inject,onBeforeUnmount } from 'vue'
 import RoomList from "../components/menu_RoomList.vue";
 import PlayerList from "../components/menu_PlayerList.vue";
 import {ChessWebSocket} from "../tool/WebSocket"
+import { stringify } from 'querystring';
 
 
 let getPlayerList : Array<number> = reactive([]);
@@ -11,8 +12,9 @@ let ws = inject("$ws") as ChessWebSocket;
 
 onMounted(()=>{
   let n = prompt("名字");
-
-  ws.getId().then((e)=>{
+  if(n == null)
+    n = "一个不愿意敲自己名字的家伙";
+    ws.getId().then((e)=>{
     let json = {
       type:1,
       data:{
