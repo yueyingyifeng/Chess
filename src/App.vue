@@ -9,8 +9,8 @@ let onGame = ref(false);
 
 <template>
   <div>
-      <Menu></Menu>
-      <Game v-show="onGame"></Game>
+    <Game v-if="onGame"></Game>
+      <Menu v-else @start="onGame=true"></Menu>
   </div>
 </template>
 

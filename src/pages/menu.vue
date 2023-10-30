@@ -4,6 +4,8 @@ import RoomList from "../components/menu_RoomList.vue";
 import PlayerList from "../components/menu_PlayerList.vue";
 import {ChessWebSocket} from "../tool/WebSocket"
 import { stringify } from 'querystring';
+import { showDialog } from 'vant'
+import 'vant/es/dialog/style';
 
 
 let getPlayerList : Array<number> = reactive([]);
@@ -64,17 +66,28 @@ onMounted(()=>{
 
 
 function createRoom(){
+  showDialog({
+  title: '标题',
+  message: '代码是写出来给人看的，附带能在机器上运行。',
+}).then(() => {
+  // on close
+});
 
+startGame()
 }
 
-
+//开始游戏
+const emit = defineEmits(['start']) 
+const startGame = () =>{
+  emit("start")
+}
 
 
 </script>
 
 <template>
   <div>
-    <button @click="createRoom">创建房间</button>
+    <button class="btn" @click="createRoom">创建房间</button>
     <RoomList :items="getRoomList.values"/>
     <PlayerList :items="getPlayerList.values"/>
 
@@ -83,5 +96,13 @@ function createRoom(){
 </template>
 
 <style scoped>
-
+.btn{
+  width: 200px;
+  height: 60px;
+  border: 1px solid #efefef;
+  background-color: #ef6500;
+  border-radius: 30px;
+  margin-top: 100px;
+  font-family:monospace;
+}
 </style>
