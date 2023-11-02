@@ -8,13 +8,9 @@ let props = defineProps({
 </script>
 
 <template>
-  <div>
-    
     <div v-for="i in items">
       <Item :id="i"></Item>
     </div>
-    
-  </div>
 </template>
 
 <style scoped>

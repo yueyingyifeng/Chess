@@ -2,15 +2,17 @@
 import Menu from "./pages/menu.vue";
 import Game from "./pages/game.vue";
 import {ref} from "vue"
+import { onMounted } from "vue";
 
-let onGame = ref(false);
+const onGame = ref(false);
 
 </script>
 
 <template>
   <div>
-    <Game v-if="onGame"></Game>
-      <Menu v-else @start="onGame=true"></Menu>
+    <!-- <Game v-if="onGame"></Game>
+      <Menu v-else @start="onGame=$event"></Menu> -->
+      <router-view></router-view>
   </div>
 </template>
 
