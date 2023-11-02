@@ -2,15 +2,15 @@
 import Item from "./menu_PlayerList_Item.vue";
 
 let props = defineProps({
-  items:Array
+  items:Array<string>
 })
+
 
 </script>
 
 <template>
   <div>
-    <div>玩家列表</div>
-    <div v-for="i in items">
+    <div v-for="i in items" class="player">
       <Item :name="i"></Item>
     </div>
     
@@ -18,5 +18,7 @@ let props = defineProps({
 </template>
 
 <style scoped>
-
+.player{
+  overflow: auto;
+}
 </style>
