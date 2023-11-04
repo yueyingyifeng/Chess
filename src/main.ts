@@ -4,18 +4,27 @@ import App from './App.vue'
 import {ChessWebSocket} from "./tool/WebSocket";
 import '@/style/common.css'
 // const EventBus = mitt();
-// import useVant from '@/utils/vant-ui'
 import router from './router/index.js'
 
-const cws = new ChessWebSocket("192.168.1.161:9900");
+let cws : ChessWebSocket; 
+new Promise(async (resovle)=>{
+    cws = new ChessWebSocket("ws:/192.168.1.161:9900");
+    let state = await cws.isConnect();
+    resovle(state);
+})
+.then(e=>{
+    setInterval(cws.ImAlive,30 * 1000) ;
+    const app = createApp(App);
+    app.provide("$ws",cws)
+    
+    // useVant(app)
+    
+    app.use(router)
+    // app.use(pinia)
+    app.mount('#app')
+})
+.catch(e=>{
+    console.log("error" + e);
+});
 
-setInterval(cws.ImAlive,60 * 1000) ;
-
-const app = createApp(App);
-app.provide("$ws",cws)
-
-// useVant(app)
-
-app.use(router)
-app.mount('#app')
 

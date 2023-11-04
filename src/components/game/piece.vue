@@ -19,8 +19,7 @@ defineProps({
   width: 25px;
   height: 25px;
   border-radius: 50%;
-  /* background-color: #000; */
-}
+  /* background-color: #000; */}
 .black{
    background-color: #000;
 }
