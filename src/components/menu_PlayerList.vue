@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import Item from "./menu_PlayerList_Item.vue";
 
-let props = defineProps({
+defineProps({
   items:Array<string>
 })
 
@@ -11,7 +11,7 @@ let props = defineProps({
 <template>
   <div>
     <div v-for="i in items" class="player">
-      <Item :name="i"></Item>
+      <Item :Id="i"></Item>
     </div>
     
   </div>

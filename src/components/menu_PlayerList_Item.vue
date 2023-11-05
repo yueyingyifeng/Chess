@@ -1,7 +1,7 @@
 <script setup lang="ts">
 
 defineProps({
-  name:String
+  Id:String
 }
 )
 
@@ -9,7 +9,7 @@ defineProps({
 
 <template>
   <div>
-    <div class="player">{{name}}</div>
+    <div class="player">{{Id}}</div>
   </div>
 </template>
 

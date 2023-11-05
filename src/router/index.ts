@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
-
+import { inject } from 'vue';
+import {ChessWebSocket} from "../tool/WebSocket"
 import game from '../pages/game.vue'
 import menu from '../pages/menu.vue'
 
@@ -12,7 +13,6 @@ const router = createRouter({
     },
     {
       path: '/',
-      component: menu,
       redirect: '/menu'
     },
     {
@@ -21,4 +21,10 @@ const router = createRouter({
     }
   ]
 });
+
+router.beforeEach((to) => {
+  let ws = inject("$ws") as ChessWebSocket;
+  if (ws.playerData.id === -1 && to.path !== '/menu') return '/menu'
+})
+
 export default router

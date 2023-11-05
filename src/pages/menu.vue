@@ -1,38 +1,51 @@
 <script setup lang="ts">
-import { reactive,onMounted,inject } from 'vue'
+import { inject,onBeforeMount,reactive ,ref} from 'vue'
 import RoomList from "../components/menu_RoomList.vue";
 import PlayerList from "../components/menu_PlayerList.vue";
 import {ChessWebSocket} from "../tool/WebSocket"
-// import { stringify } from 'querystring';
-import { showLoadingToast } from 'vant';
-import { showConfirmDialog } from 'vant'
 import 'vant/es/dialog/style'
 import { useRouter } from 'vue-router'
-import { onBeforeMount } from 'vue';
 
 let getPlayerList  : Array<string>  = reactive([]);
-let getRoomList : Array<string> = reactive([]);
+let getRoomList : Array<any> = reactive([]);
 let ws = inject("$ws") as ChessWebSocket;
+// const roomlist = [...getRoomList]  //如果没有失去响应式，就保留
+// const playerlist = reactive([...getPlayerList])  //如果没有失去响应式，就保留
 
-// 循环检测
-const loopCheck = () => {
-    ws.onMsg = function(e) {
-      console.log(ws.playerData);
-      const temp = JSON.parse(e.data); 
-      if(temp.type == 6){
+//一进页面加入服务器
+// if(ws.playerData.id !== -1)
+{
+  ws.sendMsg(JSON.stringify({ //把对象转成字符串
+        type: 102,
+        data:{
+          name:ws.playerData.name
+        }
+  }))
+}
+// 接受服务器的数据
+onBeforeMount(()=>{
+    ws.onmessage  = function(e) {
+      const temp = JSON.parse(e.data);   
+      console.log("menu:",temp);
+           
+      if(temp.type == 202){ // 玩家列表
         getPlayerList.values = temp.data;
       }
-      if(temp.type == 5){
+      if(temp.type == 201){ // 房间列表
         getRoomList.values = temp.data;
       }
+      if(temp.type == 235){ // 用户id
+        ws.playerData.id = temp.id
+      }
+      // 创建房间的请求
+      if(temp.type == 234){
+          if(temp.accept === true)
+            router.push(`/game/${ws.playerData.id}`)
     }
-  
-    
-}
-
-onMounted(()=>{
-    loopCheck()
-
+    //打印出你的id
+    setTimeout(()=>{
+          console.log(ws.playerData.id)
+    },1000)
     window.addEventListener("beforeunload",(e)=>{
       e = e || window.event;
         if (e) {
@@ -45,35 +58,37 @@ onMounted(()=>{
 
     window.addEventListener("unload",e=>{
       let json = {
-              type:0,
+              type:100,
               data:{
                 id:ws.playerData.id,
               }
             };
             ws.send(JSON.stringify(json));
     })
-
+    }
 })
 
 
-
 //创建房间
+const roomlist = [...getRoomList]
+const router = useRouter()
 function createRoom(){
   let json = {
-      type:3,
+      type:105,
       data:{
-        id:ws.id,
+        id:ws.playerData.id,
       }
   };
-  ws.ws.send(JSON.stringify(json));
+  if(roomlist.find(item => item.id === ws.playerData.id))return
+  ws.sendMsg(JSON.stringify(json))
 
-  ws.ws.onmessage = function(e) {
-      const temp = JSON.parse(e.data);
-      if(temp.type == 5){
-        getPlayerList.values = temp.data;
-      }
-    }
+  // ws.onmessage  = function(e) {
+  //     const temp = JSON.parse(e.data);      
+  //     if(temp.type == 234){
+  //         if(temp.accept === true)
+  //           router.push(`/game/${ws.playerData.id}`)
 }
+    // }
 
 </script>
 
@@ -81,7 +96,7 @@ function createRoom(){
   <!-- 左边游戏列表 -->
   <div class="playertitle">玩家列表</div>
   <div class="left">
-    <PlayerList class="player" :items="getPlayerList.values"/>
+    <PlayerList class="player" :items="getRoomList.values"/>
   </div>
   <!-- 中间创建、加入房间 -->
   <div class="main">

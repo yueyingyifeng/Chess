@@ -1,15 +1,18 @@
 <script setup lang="ts">
 import  {useRouter}  from 'vue-router'
-defineProps(
+import {inject } from 'vue'
+import {ChessWebSocket} from "../tool/WebSocket"
+
+let ws = inject("$ws") as ChessWebSocket;
+
+const props = defineProps(
   ['id']
 )
-
-
   //进入房间
 const router =  useRouter()
 const addHome = () => {
-  router.push('/game')
-  // router.push(`/game/${ws.id}`)
+  ws.sendMsg(JSON.stringify({type:103,data:{hostId:props.id, guestId:ws.playerData.id}}))
+  router.push(`/game/${props.id}`)
 }
 </script>
 
