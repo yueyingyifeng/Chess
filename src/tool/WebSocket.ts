@@ -1,5 +1,5 @@
 import { PlayerData } from "./PlayerData";
-import {  showLoadingToast } from 'vant';
+import {  showToast, showLoadingToast ,showDialog} from 'vant';
 import 'vant/es/toast/style'
 
 
@@ -18,7 +18,16 @@ export class ChessWebSocket extends WebSocket{
             console.log("Connecting server...");
         }
         else{
+            // window.removeEventListener("unload",()=>{})
+
+            // window.removeEventListener("beforeunload",()=>{})
             console.log("fail to connect server");
+            showDialog({
+                title: 'Error',
+                message: 'fail to connect server',
+              }).then(() => {
+                location.reload(); //刷新后可能id = -1
+              });
         }
     }
 
@@ -29,11 +38,20 @@ export class ChessWebSocket extends WebSocket{
             forbidClick: true,
             duration:0
           });
+        const time = setTimeout(() => {
+            toast.close(); // 关闭 Toast
+            clearTimeout(time)
+            showToast({
+                message: '连接失败',
+                position: 'top',
+              });
+          }, 10000);
         return new Promise((res)=>{
            setInterval(()=>{
             if(this.readyState === this.OPEN){
                 res(this.OPEN);
                 toast.close()
+                clearTimeout(time)
             }
            },1000) 
         }) 

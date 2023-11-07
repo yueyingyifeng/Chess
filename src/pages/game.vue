@@ -1,68 +1,54 @@
 <script setup lang="ts">
 import piece from "../components/game/piece.vue"
-import {ref ,inject} from 'vue'
-import { useRouter,useRoute } from 'vue-router'
-import { showConfirmDialog } from 'vant';
+import {ref ,inject,onMounted,reactive} from 'vue'
+import { useRouter,useRoute, routerViewLocationKey } from 'vue-router'
 import {ChessWebSocket} from "../tool/WebSocket"
-import { reactive } from "vue";
-import { onMounted } from "vue";
+import { showToast,showConfirmDialog, Toast } from 'vant';
 const router = useRouter()
 const route = useRoute()
 let ws = inject("$ws") as ChessWebSocket;
 
 
 //接受此房间的房间号
-const RoomId:number = parseInt(route.params.id as string,10)
-
-// myTurn 状态
+const RoomId:number = parseInt(route.query.id as string,10)
 // 当状态为true时，表示我方回合，启动点击事件
 const myTurn = ref(false)
-// 当选好先后手，就可以点击开始游戏了
-const allReady = ref(true)
-// 是否开始了游戏
-const started = ref(false)  
+// // 游戏结束
+// let  = ref(false)
+// 是否结束了游戏
+const gameOver = ref(false)  
+// 我下棋的位置
+let posi = ref(0)
+// 对方下棋的位置，用于呼吸效果
+let rivposi :number
+// 对手的信息
+let rival = ref({id:-1,name:'等待玩家...'}) // 当对手退出了，还原这个%*************************************
+// 先手和后手的棋子颜色
+const isFirst = ref(1)
+//连败
+let fail = ref(0)
+// 最后下棋的效果
+let lastpiece :Array<boolean> = []
+//不是房主，获得房主信息
+if(RoomId !== ws.playerData.id) 
+{
+    rival.value.id = RoomId
+    rival.value.name = route.query.name as string
+}
 
 //接收服务器
 ws.onmessage  = function(e) {
   const temp = JSON.parse(e.data); 
     console.log("game",temp);
     //是否有人进入房间     
-    if(temp.type == 204)
+    if(temp.type === 204) //只有房主能收到
     {
-      revalId.value= temp.data.id
-      console.log("有人进来了");
-    }
-    //下棋是否被允许 -- 判断是否允许进入房间
-    if(temp.type === 234) //************************************** */
-    {
-      if(temp.accept === true)
-        myTurn.value = true
-      else{ //不让进 或者不让
-        router.go(-1)
-      }
-  }
-    //对方下棋
-    if(temp.type == 205)
-    {
-      let item = (temp.x -1)*13 + temp.y
-      pieceNum[item] = 2
-      myTurn.value = true
-    }
-
-}
-
-
-
-const revalId = ref('')
-onMounted( async()=>{
-    //当一进入这个房间，等待是否有人加入房间
-    console.log(ws.playerData.id);
- 
-    if(revalId.value !== '')
-    {
+      rival.value = temp.data
+    if(rival.value.id !== -1)
+    {          
       //有人进来后，房主选择谁先手，谁后手
       if(RoomId === ws.playerData.id)
-      {
+      {      
         showConfirmDialog({
             title: '决定先手',
             message:
@@ -71,19 +57,93 @@ onMounted( async()=>{
             cancelButtonText:'对方先手'
           })
             .then(() => {
-              ws.sendMsg(JSON.stringify({type:106,data:{whoFirst:true}}))
+              ws.sendMsg(JSON.stringify({type:106,data:{id:ws.playerData.id,whoFirst:true}}))
+              isFirst.value = 1
               myTurn.value = true
+              showToast('Show Time')
             })
             .catch(() => {
-              ws.sendMsg(JSON.stringify({type:106,data:{whoFirst:false}}))
+              ws.sendMsg(JSON.stringify({type:106,data:{id:ws.playerData.id,whoFirst:false}}))
+              isFirst.value = 2
+              showToast('Show Time')
         });
       }
-      else
-        console.log("非房主");
     }
+    }
+    //下棋是否被允许 -- 判断是否允许进入房间
+    if(temp.type === 234) //************************************** */
+    {
+      if(temp.accept === true) 
+      {
+        pieceNum[posi.value] = isFirst.value
+        myTurn.value = false
+        lastpiece[rivposi] = false //关闭对手的呼吸效果
+      }
+      else{ //不让进 或者不让下棋？
+        router.replace('/')  // 只出现在房间满和不让下棋，有问题
+        showToast({
+          message: '房间已满',
+          icon: 'warn-o',
+          duration:3000
+        });
+      }
+    }
+    //收到对方下棋
+    if(temp.type === 205)
+    {
+      lastpiece[rivposi] = false
+      rivposi  = (temp.data.position.x -1)*13 + temp.data.position.y
+      pieceNum[rivposi] = isFirst.value == 1? 2:1
+      lastpiece[rivposi] = true
+      myTurn.value = true
+    }
+    //对手收到是否先手
+    if(temp.type === 203) //非房主接受
+    {
+       isFirst.value = temp.whoFirst? 1:2
+       myTurn.value = temp.whoFirst
+       showToast('我方先手下棋')
+    }
+    //判断获胜
+    if(temp.type === 233)//必定是下棋方赢了
+    {
+      if(temp.winningId === ws.playerData.id)
+      {
+        alert('胜利! You are victory ~ ')
+        gameOver.value = true
+      }
+      else  {
+        fail.value++
+        if(fail.value == 2) 
+        {
+          alert('这小子指定是开挂了')
+          gameOver.value = true
+          return
+        } 
+        alert('输了耶，再干他一次试试？')
+        gameOver.value = true
+      }
+    }
+     //房主离开房间开了
+     if(temp.type === 206)
+    {
+      alert('房主跑路了')
+      ws.sendMsg(JSON.stringify({type:101,data:{id:ws.playerData.id}}))
+      router.replace('/')
+    }
+    if(temp.type === 207)
+    {
+      rival.value = { id:-1,name:'等待玩家...'}
+      showToast('对方已退出')
+      myTurn.value = false
+
+      //当对方退出的时候，需要清空棋盘
+    }
+  }
+
+onMounted( async()=>{
+    console.log(ws.playerData.id);
 })
-
-
 
 
 //标题栏逻辑
@@ -94,9 +154,11 @@ const onClickLeft = () =>{
     '您确定退出吗？',
 })
   .then(() => {
-    // on confirm
-    router.go(-1)
-  })
+    router.replace('/menu')
+    setTimeout(()=>{
+      ws.sendMsg(JSON.stringify({type:101,data:{id:ws.playerData.id}}))
+    },100)
+    })
   .catch(() => {
     // on cancel
   });
@@ -106,34 +168,27 @@ const onClickLeft = () =>{
 const pieceNum : Array<number> = reactive([])
 //下棋逻辑
 const play = (item:number) => {
+  posi.value = item
   const row = Math.floor(item / 13) + 1
   const col = item % 13
  
   // 我的回合
   if(myTurn.value === true)
-  {
-    ws.sendMsg(JSON.stringify({type:104,data:{row,col}}))
-    pieceNum[item] = 1 //等于房主决定的 还没写
-    myTurn.value = false
-  }
+    ws.sendMsg(JSON.stringify({type:104,data:{id:ws.playerData.id,position:{x:row,y:col}}}))
 }
-
-  
-  // 每次下棋接受233数据，是否获胜********************************
   
 
-
-//点击了开始游戏
-const clickstart = () => {
-    started.value = true
-    console.log("开始游戏了");
-    
+//点击了再来一局
+const again = () => {
+    gameOver.value = true
 }
 </script>
 
 
 <template>
 <div>
+  <!-- 听说添加这个alter会生效，在ios -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <!-- 标题栏 -->
   <div class="header">
     <van-nav-bar
@@ -144,6 +199,17 @@ const clickstart = () => {
       :fixed="true"
     />
   </div>
+  <!-- 用户和棋子 -->
+  <div class="rival">
+      <span>{{RoomId === ws.playerData.id?rival.name:ws.playerData.name}}</span>
+      <piece class="rivpiece" :piece-num="isFirst==1?2:1"></piece>
+  </div>
+  <div class="me">
+      <span>{{RoomId === ws.playerData.id?ws.playerData.name : rival.name }}</span>
+      <piece class="mepiece" :piece-num="isFirst"></piece>
+  </div>
+
+
   <!-- 棋盘 -->
   <div class="box">
         <!--表格构成棋盘-->
@@ -159,14 +225,13 @@ const clickstart = () => {
         </table>
         <!-- 棋子 -->
         <div class="box2">
-           <piece v-for="item in 169" :piece-num ="pieceNum[item]"></piece>             
-           <!-- <piece v-for="item in 169" :piece-num ="pieceNum[item]" @click="play(item)"></piece>              -->
+           <piece v-for="item in 169" :lastpiece="lastpiece[item]" :piece-num ="pieceNum[item]" @click="play(item)"></piece>             
         </div>
 
     </div>
         <div class="box1">
-                      <!-- 都准备好了，并且未开始游戏的时候显示 -->
-          <button class="btn" v-if="allReady&&!started" @click="clickstart">开始游戏</button>
+                      <!-- 游戏结束显示 -->
+          <button class="btn" v-if="gameOver&&rival.id !== -1" @click="again">再来一局</button>
         </div>
 </div>  
 </template>
@@ -206,33 +271,6 @@ const clickstart = () => {
   user-select: none;
 }
 
-.t2{
-  /* border: 0px solid red; */
-  width:338.5px; 
-  height:338.5px; 
-  border-collapse:collapse; 
-  /* position: absolute;
-  left: 443px;
-  top: 119px; */
-  position:absolute;
-  left: 16px;
-  top: 17px;
-
-  /* display: none; */
-   
-}
-.h2{
-  border: 1px solid red;
-}
-.l2{
-  border: 1px solid red;
-  width: 25px;
-  height: 25px;
-  margin: 0px;
-  padding: 0px;
-  background-color: blue;
-  border-radius: 50%;
-}
 .box1{
   width: 100%;
   height: 40px;
@@ -256,9 +294,35 @@ const clickstart = () => {
   display: grid;
   grid-template-columns: repeat(13, 26px); 
   grid-template-rows: repeat(13, 26px); 
-  border: 1px solid red;
+  border: 0px solid red;
   position: absolute;
   top:17px;
   left: 16px;
+}
+.rival{
+  width: 80px;
+  height: 50px;
+  position: absolute;
+  left: 0;
+  top: 75px;
+}
+.me{
+  width: 80px;
+  height: 50px;
+  position: absolute;
+  right: 0;
+  top: 75px;
+  text-align: right;
+  margin-bottom: 10px ;
+}
+.rivpiece{
+  position: absolute;
+  left: 5px;
+  margin-top: 5px;
+}
+.mepiece{
+  position: absolute;
+  right: 5px;
+  margin-top: 5px;
 }
 </style>

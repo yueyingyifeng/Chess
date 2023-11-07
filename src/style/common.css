@@ -21,5 +21,6 @@ body {
   justify-content: center;
   align-items: center;
   flex-direction: column; /* 垂直布局 */
+  user-select: none;
 }
 

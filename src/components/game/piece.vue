@@ -1,17 +1,17 @@
 <script setup lang="ts">
-// import {ref} from 'vue'
 defineProps({
   pieceNum:{
-      type: Number
-    }
+      type: Number,
+    },
+  lastpiece:{
+      type:Boolean
+    } 
 })
-
-// 处理对手的下棋位置
 
 </script>
 
 <template>
-    <div class="piece" :class="{black:(pieceNum === 1),white:(pieceNum === 2)}"></div>
+    <div class="piece" :class="{black:(pieceNum === 1),white:(pieceNum === 2),huxi:lastpiece}"></div>
 </template>
 
 <style scoped>
@@ -19,11 +19,27 @@ defineProps({
   width: 25px;
   height: 25px;
   border-radius: 50%;
-  /* background-color: #000; */}
+}
 .black{
    background-color: #000;
 }
 .white{
-  background-color: rgb(250, 253, 198)
+  background-color: rgb(238, 238, 238);
+}
+.huxi{
+  animation: breathe 2s infinite alternate;
+}
+
+/* 定义呼吸效果的关键帧动画 */
+@keyframes breathe {
+  0% {
+    transform: scale(1);
+    border: 2px solid rgb(94, 94, 221)
+
+  }
+  100% {
+    transform: scale(1.1);
+    border: 3px solid rgb(52, 52, 214)
+   }
 }
 </style>

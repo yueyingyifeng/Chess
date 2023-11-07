@@ -16,8 +16,8 @@ const router = createRouter({
       redirect: '/menu'
     },
     {
-        path:'/game/:id',
-        component:game
+      path:'/game',
+      component:game
     }
   ]
 });

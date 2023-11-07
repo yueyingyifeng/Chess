@@ -2,23 +2,29 @@
 import  {useRouter}  from 'vue-router'
 import {inject } from 'vue'
 import {ChessWebSocket} from "../tool/WebSocket"
-
 let ws = inject("$ws") as ChessWebSocket;
 
 const props = defineProps(
-  ['id']
+  ['item']
 )
+
   //进入房间
 const router =  useRouter()
 const addHome = () => {
-  ws.sendMsg(JSON.stringify({type:103,data:{hostId:props.id, guestId:ws.playerData.id}}))
-  router.push(`/game/${props.id}`)
+  ws.sendMsg(JSON.stringify({
+    type:103,
+     data:
+    {   hostId:props.item.id,
+        guestId:ws.playerData.id
+    }})
+  )
+  router.replace(`/game/?id=${props.item.id}&name=${props.item.name}`)
 }
 </script>
 
 <template>
   <div>
-    <button class="btn" @click="addHome">房间号-{{ id }}</button>
+    <button class="btn" @click="addHome">{{ item.name }}的房间</button>
   </div>
 </template>
 
