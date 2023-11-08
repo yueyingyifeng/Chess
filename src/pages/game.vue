@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import piece from "../components/game/piece.vue"
-import {ref ,inject,onMounted,reactive} from 'vue'
-import { useRouter,useRoute, routerViewLocationKey } from 'vue-router'
+import {ref ,inject, type Ref} from 'vue'
+import { useRouter,useRoute, } from 'vue-router'
 import {ChessWebSocket} from "../tool/WebSocket"
-import { showToast,showConfirmDialog, Toast } from 'vant';
+import { showToast,showConfirmDialog, showNotify, Dialog, closeDialog } from 'vant';
 const router = useRouter()
 const route = useRoute()
 let ws = inject("$ws") as ChessWebSocket;
@@ -11,8 +11,12 @@ let ws = inject("$ws") as ChessWebSocket;
 
 //接受此房间的房间号
 const RoomId:number = parseInt(route.query.id as string,10)
+// 判断是否是房主
+const host : boolean = RoomId === ws.playerData.id
 // 当状态为true时，表示我方回合，启动点击事件
 const myTurn = ref(false)
+//落棋数组
+let pieceNum = ref([]) as Ref<number[]>;
 // // 游戏结束
 // let  = ref(false)
 // 是否结束了游戏
@@ -22,18 +26,46 @@ let posi = ref(0)
 // 对方下棋的位置，用于呼吸效果
 let rivposi :number
 // 对手的信息
-let rival = ref({id:-1,name:'等待玩家...'}) // 当对手退出了，还原这个%*************************************
+let rival = ref({id:-1,name:'等待玩家...'}) 
 // 先手和后手的棋子颜色
 const isFirst = ref(1)
 //连败
 let fail = ref(0)
 // 最后下棋的效果
 let lastpiece :Array<boolean> = []
+// 房主和对手的准备
+let hostshow = ref(false)
+let rivalshow = ref(false)
 //不是房主，获得房主信息
-if(RoomId !== ws.playerData.id) 
+if(!host) 
 {
     rival.value.id = RoomId
     rival.value.name = route.query.name as string
+}
+//关闭选择先手的弹框
+// const dialog = ref()
+//封装房主选先后手
+function first() {
+    if(host)
+    {      
+      showConfirmDialog({
+          title: '决定先手',
+          message:
+            '请决定先手玩家',
+          confirmButtonText:'我方先手',
+          cancelButtonText:'对方先手'
+        })
+          .then(() => {
+            ws.sendMsg(JSON.stringify({type:106,data:{id:ws.playerData.id,whoFirst:true}}))
+            isFirst.value = 1
+            myTurn.value = true
+            showToast('Show Time')
+          })
+          .catch(() => {
+            ws.sendMsg(JSON.stringify({type:106,data:{id:ws.playerData.id,whoFirst:false}}))
+            isFirst.value = 2
+      })
+    }
 }
 
 //接收服务器
@@ -47,44 +79,25 @@ ws.onmessage  = function(e) {
     if(rival.value.id !== -1)
     {          
       //有人进来后，房主选择谁先手，谁后手
-      if(RoomId === ws.playerData.id)
-      {      
-        showConfirmDialog({
-            title: '决定先手',
-            message:
-              '请决定先手玩家',
-            confirmButtonText:'我方先手',
-            cancelButtonText:'对方先手'
-          })
-            .then(() => {
-              ws.sendMsg(JSON.stringify({type:106,data:{id:ws.playerData.id,whoFirst:true}}))
-              isFirst.value = 1
-              myTurn.value = true
-              showToast('Show Time')
-            })
-            .catch(() => {
-              ws.sendMsg(JSON.stringify({type:106,data:{id:ws.playerData.id,whoFirst:false}}))
-              isFirst.value = 2
-              showToast('Show Time')
-        });
-      }
+      first()
     }
     }
-    //下棋是否被允许 -- 判断是否允许进入房间
-    if(temp.type === 234) //************************************** */
+    //下棋是否被允许
+    if(temp.type === 234) 
     {
       if(temp.accept === true) 
       {
-        pieceNum[posi.value] = isFirst.value
+        pieceNum.value[posi.value] = isFirst.value
         myTurn.value = false
         lastpiece[rivposi] = false //关闭对手的呼吸效果
       }
-      else{ //不让进 或者不让下棋？
-        router.replace('/')  // 只出现在房间满和不让下棋，有问题
+      else{ 
+        // 被拒绝了就重新下一个
+        myTurn.value = true
         showToast({
-          message: '房间已满',
+          message: '无法下棋',
           icon: 'warn-o',
-          duration:3000
+          duration:5000
         });
       }
     }
@@ -93,7 +106,7 @@ ws.onmessage  = function(e) {
     {
       lastpiece[rivposi] = false
       rivposi  = (temp.data.position.x -1)*13 + temp.data.position.y
-      pieceNum[rivposi] = isFirst.value == 1? 2:1
+      pieceNum.value[rivposi] = isFirst.value == 1? 2:1
       lastpiece[rivposi] = true
       myTurn.value = true
     }
@@ -102,7 +115,11 @@ ws.onmessage  = function(e) {
     {
        isFirst.value = temp.whoFirst? 1:2
        myTurn.value = temp.whoFirst
-       showToast('我方先手下棋')
+       if(myTurn.value)
+       showToast({
+        message: '我方先手下棋',
+        duration:4000
+      });
     }
     //判断获胜
     if(temp.type === 233)//必定是下棋方赢了
@@ -111,6 +128,7 @@ ws.onmessage  = function(e) {
       {
         alert('胜利! You are victory ~ ')
         gameOver.value = true
+        myTurn.value = false
       }
       else  {
         fail.value++
@@ -118,33 +136,72 @@ ws.onmessage  = function(e) {
         {
           alert('这小子指定是开挂了')
           gameOver.value = true
+          myTurn.value = false
           return
         } 
         alert('输了耶，再干他一次试试？')
         gameOver.value = true
+        myTurn.value = false
       }
     }
      //房主离开房间开了
-     if(temp.type === 206)
+    if(temp.type === 206)
     {
       alert('房主跑路了')
       ws.sendMsg(JSON.stringify({type:101,data:{id:ws.playerData.id}}))
       router.replace('/')
     }
+    //对手离开了
     if(temp.type === 207)
     {
       rival.value = { id:-1,name:'等待玩家...'}
       showToast('对方已退出')
       myTurn.value = false
+      
+      //房主还没点击开始游戏的时候就离开了，退出房主的dialog
+      closeDialog()
+      //中途离开
+      //////************************************************* */
 
-      //当对方退出的时候，需要清空棋盘
+      pieceNum.value = [] as any
     }
-  }
-
-onMounted( async()=>{
-    console.log(ws.playerData.id);
-})
-
+    // 再来一把
+    if(temp.type === 232)
+    {
+      for(let i = 0;i<temp.data.ids.length;i++)
+      {
+        if(rival.value.id === temp.data.ids[i])
+        {
+          rivalshow.value = true;
+          break;
+        }
+      }
+      if(temp.data.allReady)
+      {
+        //清空棋盘
+        pieceNum.value = [] as any
+        //提示游戏开始
+        showNotify({ type: 'primary', message: '游戏开始' })
+        //清空了还需要把最后一个棋子的呼吸效果去掉
+        lastpiece[rivposi] = false
+        //服务器应该也会清空，然后发来
+        first();
+        //关掉准备
+        rivalshow.value = false;
+        hostshow.value = false;
+        //禁止下棋
+        myTurn.value = false
+      }     
+    }
+    //掉线
+    if(temp.type === 250)
+    {
+      showToast({
+        message: 'You have been disconnected, please refresh and try again',
+        duration:0
+      });
+    }
+}
 
 //标题栏逻辑
 const onClickLeft = () =>{
@@ -164,8 +221,7 @@ const onClickLeft = () =>{
   });
 }
 
-//落棋数组
-const pieceNum : Array<number> = reactive([])
+
 //下棋逻辑
 const play = (item:number) => {
   posi.value = item
@@ -180,7 +236,13 @@ const play = (item:number) => {
 
 //点击了再来一局
 const again = () => {
-    gameOver.value = true
+  gameOver.value = false //消失再来一局
+  if(host)
+    hostshow.value = true 
+  else
+    rivalshow.value = true
+  
+  ws.sendMsg(JSON.stringify({type:108,data:{id:ws.playerData.id}}))
 }
 </script>
 
@@ -201,12 +263,16 @@ const again = () => {
   </div>
   <!-- 用户和棋子 -->
   <div class="rival">
-      <span>{{RoomId === ws.playerData.id?rival.name:ws.playerData.name}}</span>
-      <piece class="rivpiece" :piece-num="isFirst==1?2:1"></piece>
+      <span>{{host?rival.name:ws.playerData.name}}
+        <van-tag :show="rivalshow" type="success">已准备</van-tag>
+      </span>
+      <piece class="rivpiece" :piece-num="host?isFirst==1?2:1:isFirst"></piece>
   </div>
   <div class="me">
-      <span>{{RoomId === ws.playerData.id?ws.playerData.name : rival.name }}</span>
-      <piece class="mepiece" :piece-num="isFirst"></piece>
+      <span><van-tag :show="hostshow" type="success">已准备</van-tag>
+        {{host?ws.playerData.name : rival.name }}
+      </span>
+      <piece class="mepiece" :piece-num="host?isFirst:isFirst==1?2:1"></piece>
   </div>
 
 
@@ -225,7 +291,7 @@ const again = () => {
         </table>
         <!-- 棋子 -->
         <div class="box2">
-           <piece v-for="item in 169" :lastpiece="lastpiece[item]" :piece-num ="pieceNum[item]" @click="play(item)"></piece>             
+           <piece v-for="item in 169" :lastpiece="lastpiece[item]" :pieceNum ="pieceNum[item]" @click="play(item)"></piece>             
         </div>
 
     </div>
@@ -243,12 +309,12 @@ const again = () => {
   position: relative;
 }
 .t1{
-   border: 5px solid #000000;
+   border: 5px solid #030303;
    background-color: #e7c633;
    width:372.5px; 
-   height:372.5px; 
+   height:365px; 
    border-collapse:collapse; 
-   /* margin: 100px 0 0 0; */
+   margin: 10px 0 0 0;
    position: relative;
 }
 .h1{
@@ -277,6 +343,7 @@ const again = () => {
   display: flex;
   justify-content: center;
   align-items: center;
+  margin-top: 10px;
 }
 .btn{
     width: 34%;
@@ -300,14 +367,15 @@ const again = () => {
   left: 16px;
 }
 .rival{
-  width: 80px;
+  width: 175px;
   height: 50px;
   position: absolute;
   left: 0;
   top: 75px;
+  align-items: center;
 }
 .me{
-  width: 80px;
+  width: 175px;
   height: 50px;
   position: absolute;
   right: 0;

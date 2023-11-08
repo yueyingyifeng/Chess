@@ -33,13 +33,13 @@ defineProps({
 /* 定义呼吸效果的关键帧动画 */
 @keyframes breathe {
   0% {
-    transform: scale(1);
-    border: 2px solid rgb(94, 94, 221)
+    /* transform: scale(1); */
+    border: 0px solid rgb(94, 94, 221)
 
   }
   100% {
-    transform: scale(1.1);
-    border: 3px solid rgb(52, 52, 214)
+    /* transform: scale(1.05); */
+    border: 1px solid rgb(94, 94, 221)
    }
 }
 </style>

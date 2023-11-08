@@ -5,6 +5,7 @@ import game from '../pages/game.vue'
 import menu from '../pages/menu.vue'
 
 const router = createRouter({
+
   history: createWebHistory(import.meta.env.BASE_URL),
   routes:[
     {

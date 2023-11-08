@@ -18,15 +18,11 @@ export class ChessWebSocket extends WebSocket{
             console.log("Connecting server...");
         }
         else{
-            // window.removeEventListener("unload",()=>{})
-
-            // window.removeEventListener("beforeunload",()=>{})
-            console.log("fail to connect server");
             showDialog({
                 title: 'Error',
                 message: 'fail to connect server',
               }).then(() => {
-                location.reload(); //刷新后可能id = -1
+                location.reload();
               });
         }
     }

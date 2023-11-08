@@ -2,7 +2,7 @@
 import Item from "./menu_PlayerList_Item.vue";
 
 defineProps({
-  items:Array<string>
+  items:String
 })
 
 

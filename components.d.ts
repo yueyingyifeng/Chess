@@ -14,7 +14,7 @@ declare module 'vue' {
     Piece: typeof import('./src/components/game/piece.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
-    VanLoading: typeof import('vant/es')['Loading']
     VanNavBar: typeof import('vant/es')['NavBar']
+    VanTag: typeof import('vant/es')['Tag']
   }
 }

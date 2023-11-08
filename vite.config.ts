@@ -17,7 +17,8 @@ export default defineConfig({
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url))
     }
-  }
+  },
+  base:'/'// 类似publicPath，'./'避免打包访问后空白页面，要加上，不然线上也访问不了
 })
 
 

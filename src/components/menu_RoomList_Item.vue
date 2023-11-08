@@ -2,6 +2,8 @@
 import  {useRouter}  from 'vue-router'
 import {inject } from 'vue'
 import {ChessWebSocket} from "../tool/WebSocket"
+import { showNotify } from 'vant';
+import 'vant/es/notify/style';
 let ws = inject("$ws") as ChessWebSocket;
 
 const props = defineProps(
@@ -19,6 +21,7 @@ const addHome = () => {
     }})
   )
   router.replace(`/game/?id=${props.item.id}&name=${props.item.name}`)
+  showNotify({ type: 'success', message: '加入成功' });
 }
 </script>
 

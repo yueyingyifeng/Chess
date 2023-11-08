@@ -5,16 +5,13 @@ import PlayerList from "../components/menu_PlayerList.vue";
 import {ChessWebSocket} from "../tool/WebSocket"
 import 'vant/es/dialog/style'
 import { useRouter,useRoute } from 'vue-router'
-import { showNotify } from 'vant';
+import { showNotify,showToast } from 'vant';
 import 'vant/es/notify/style';
 
 let getPlayerList  : Array<string>  = reactive([]);
 let getRoomList : Array<any> = reactive([]);
 let ws = inject("$ws") as ChessWebSocket;
 const route = useRoute()
-// const roomlist = [...getRoomList]  //如果没有失去响应式，就保留
-// const playerlist = reactive([...getPlayerList])  //如果没有失去响应式，就保留
-
 
 // 接受服务器的数据
 ws.onmessage  = function(e) {
@@ -37,6 +34,22 @@ ws.onmessage  = function(e) {
           showNotify({ type: 'success', message: '创建成功' });
         }
     }
+    // if(temp.type === ???)
+    // {
+        // router.replace('/')  // 只出现在房间满和不让下棋，有问题
+        // showToast({
+        //   message: '房间已满',
+        //   icon: 'warn-o',
+        //   duration:3000
+        // });
+    // }
+    if(temp.type === 250)
+    {
+      showToast({
+        message: 'You have been disconnected, please refresh and try again',
+        duration:0
+      });
+    }
   }
 
 
@@ -44,6 +57,8 @@ onMounted(()=>{
     setTimeout(()=>{
           //打印出你的id
           console.log("我的id = ",ws.playerData.id)
+          console.log("在线玩家数量",getPlayerList.values.length);
+          
           //获取list
           if(getPlayerList.values.length === 0)
             ws.sendMsg(JSON.stringify({type:107,data:{id:ws.playerData.id}}))
