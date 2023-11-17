@@ -12,38 +12,50 @@ let getPlayerList  : Array<string>  = reactive([]);
 let getRoomList : Array<any> = reactive([]);
 let ws = inject("$ws") as ChessWebSocket;
 const route = useRoute()
+//接受进入房间的数据
+const item = ref()
+const addroomData = (e : object) => {
+  item.value = e;
+}
 
 // 接受服务器的数据
 ws.onmessage  = function(e) {
     const temp = JSON.parse(e.data);   
-    console.log("menu:",temp);
-          
+    // console.log("menu:",temp);
+              
     if(temp.type == 202){ // 玩家列表
       getPlayerList.values = temp.data;
     }
-    if(temp.type == 201){ // 房间列表
+    else if(temp.type == 201){ // 房间列表
       getRoomList.values = temp.data;
     }
-    if(temp.type == 235){ // 用户id
+    else if(temp.type == 235){ // 用户id
       ws.playerData.id = temp.id
     }
-    if(temp.type == 234){ // 创建房间的请求
+    else if(temp.type == 234){ // 创建房间的请求
         if(temp.accept === true)
         {
           router.replace(`/game/?id=${ws.playerData.id}`)
           showNotify({ type: 'success', message: '创建成功' });
         }
     }
-    // if(temp.type === ???)
-    // {
-        // router.replace('/')  // 只出现在房间满和不让下棋，有问题
-        // showToast({
-        //   message: '房间已满',
-        //   icon: 'warn-o',
-        //   duration:3000
-        // });
-    // }
-    if(temp.type === 250)
+    else if(temp.type === 236) //加入房间的请求
+    {
+      if(temp.accept)
+      {
+        router.replace(`/game/?id=${item.value.id}&name=${item.value.name}`)
+        showNotify({ type: 'success', message: '加入成功' });
+      }
+      else{
+        router.replace('/')
+        showToast({
+          message: '房间已满',
+          icon: 'warn-o',
+          duration:5000
+        });
+      }
+    }
+    else if(temp.type === 250)
     {
       showToast({
         message: 'You have been disconnected, please refresh and try again',
@@ -56,8 +68,8 @@ ws.onmessage  = function(e) {
 onMounted(()=>{
     setTimeout(()=>{
           //打印出你的id
-          console.log("我的id = ",ws.playerData.id)
-          console.log("在线玩家数量",getPlayerList.values.length);
+          // console.log("我的id = ",ws.playerData.id)
+          // console.log("在线玩家数量",getPlayerList.values.length);
           
           //获取list
           if(getPlayerList.values.length === 0)
@@ -65,7 +77,7 @@ onMounted(()=>{
           //id获取失败
           if(ws.playerData.id === -1)
             showNotify({ type: 'danger', message: 'ID获取失败'});
-    },300)
+    },700)
 
 
     window.addEventListener("beforeunload",(e)=>{
@@ -117,7 +129,7 @@ function createRoom(){
   <!-- 中间创建、加入房间 -->
   <div class="main">
     <button class="btn" @click="createRoom">创建房间</button>
-    <RoomList :items="getRoomList.values"/>
+    <RoomList :items="getRoomList.values" @send-item="addroomData"/>
   </div>
 </template>
 

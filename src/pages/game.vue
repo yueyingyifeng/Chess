@@ -3,7 +3,7 @@ import piece from "../components/game/piece.vue"
 import {ref ,inject, type Ref} from 'vue'
 import { useRouter,useRoute, } from 'vue-router'
 import {ChessWebSocket} from "../tool/WebSocket"
-import { showToast,showConfirmDialog, showNotify, Dialog, closeDialog } from 'vant';
+import { showToast,showConfirmDialog, showNotify, closeDialog } from 'vant';
 const router = useRouter()
 const route = useRoute()
 let ws = inject("$ws") as ChessWebSocket;
@@ -31,8 +31,14 @@ let rival = ref({id:-1,name:'等待玩家...'})
 const isFirst = ref(1)
 //连败
 let fail = ref(0)
+//避免重复点击悔棋，下棋后可再次显示
+let pieced = ref(false)
 // 最后下棋的效果
 let lastpiece :Array<boolean> = []
+//下棋的音效
+const chessAudio = ref<any>(null)
+//下棋编号计数
+const xqNumber = ref(0)
 // 房主和对手的准备
 let hostshow = ref(false)
 let rivalshow = ref(false)
@@ -42,8 +48,6 @@ if(!host)
     rival.value.id = RoomId
     rival.value.name = route.query.name as string
 }
-//关闭选择先手的弹框
-// const dialog = ref()
 //封装房主选先后手
 function first() {
     if(host)
@@ -67,11 +71,26 @@ function first() {
       })
     }
 }
-
+//封装 -- 悔自己的棋子
+const regret = () => {
+  pieceNum.value[posi.value] = 0
+    showToast({
+      message: '悔棋成功',
+      position: 'top',
+      duration: 6000
+    });
+}
+//封装 -- 同意悔棋，发请求，去掉别人的棋子
+const agreeRegret = () => {
+  ws.sendMsg(JSON.stringify({type:109,data:{id:ws.playerData.id,isMyTurn:myTurn.value,agree:true}}))
+  pieceNum.value[rivposi] = 0
+  lastpiece[rivposi] = false //清掉高亮特效
+}
 //接收服务器
 ws.onmessage  = function(e) {
   const temp = JSON.parse(e.data); 
     console.log("game",temp);
+
     //是否有人进入房间     
     if(temp.type === 204) //只有房主能收到
     {
@@ -83,76 +102,81 @@ ws.onmessage  = function(e) {
     }
     }
     //下棋是否被允许
-    if(temp.type === 234) 
+    else if(temp.type === 234) 
     {
       if(temp.accept === true) 
       {
         pieceNum.value[posi.value] = isFirst.value
         myTurn.value = false
         lastpiece[rivposi] = false //关闭对手的呼吸效果
+        chessAudio.value.play()//播放声音
+
+        pieced.value = true //可以进行悔棋了
       }
       else{ 
         // 被拒绝了就重新下一个
         myTurn.value = true
         showToast({
-          message: '无法下棋',
+          message: '此处无法下棋',
           icon: 'warn-o',
           duration:5000
         });
       }
     }
     //收到对方下棋
-    if(temp.type === 205)
-    {
+    else if(temp.type === 205)
+    {      
+      xqNumber.value = temp.data.no + 1
       lastpiece[rivposi] = false
       rivposi  = (temp.data.position.x -1)*13 + temp.data.position.y
       pieceNum.value[rivposi] = isFirst.value == 1? 2:1
       lastpiece[rivposi] = true
+      chessAudio.value.play()//播放声音
       myTurn.value = true
     }
     //对手收到是否先手
-    if(temp.type === 203) //非房主接受
+    else if(temp.type === 203) //非房主接受
     {
        isFirst.value = temp.whoFirst? 1:2
        myTurn.value = temp.whoFirst
        if(myTurn.value)
        showToast({
         message: '我方先手下棋',
-        duration:4000
+        duration: 5000
       });
     }
     //判断获胜
-    if(temp.type === 233)//必定是下棋方赢了
-    {
-      if(temp.winningId === ws.playerData.id)
+    else if(temp.type === 233)
+    {      
+      myTurn.value = false
+      gameOver.value = true
+      if(temp.winningId === ws.playerData.id)// 这个必不会阻塞，因为这个棋子是你自己下的
       {
-        alert('胜利! You are victory ~ ')
-        gameOver.value = true
-        myTurn.value = false
+        alert('牛逼')
       }
-      else  {
-        fail.value++
-        if(fail.value == 2) 
-        {
-          alert('这小子指定是开挂了')
-          gameOver.value = true
-          myTurn.value = false
-          return
-        } 
-        alert('输了耶，再干他一次试试？')
-        gameOver.value = true
-        myTurn.value = false
+      else {
+        setTimeout(()=>{
+          fail.value++
+          if(fail.value == 3) 
+          {
+            alert('这小子指定是开挂了')
+            return
+          } 
+          alert('输了耶，再干他一次试试？')
+          },500)
       }
     }
      //房主离开房间开了
-    if(temp.type === 206)
+    else if(temp.type === 206)
     {
       alert('房主跑路了')
       ws.sendMsg(JSON.stringify({type:101,data:{id:ws.playerData.id}}))
       router.replace('/')
+
+      closeDialog()
     }
     //对手离开了
-    if(temp.type === 207)
+    else if(temp.type === 207)
     {
       rival.value = { id:-1,name:'等待玩家...'}
       showToast('对方已退出')
@@ -161,12 +185,14 @@ ws.onmessage  = function(e) {
       //房主还没点击开始游戏的时候就离开了，退出房主的dialog
       closeDialog()
       //中途离开
-      //////************************************************* */
+      lastpiece[rivposi] = false
 
       pieceNum.value = [] as any
+
+      rivalshow.value = false; 
     }
     // 再来一把
-    if(temp.type === 232)
+    else if(temp.type === 232)
     {
       for(let i = 0;i<temp.data.ids.length;i++)
       {
@@ -191,10 +217,64 @@ ws.onmessage  = function(e) {
         hostshow.value = false;
         //禁止下棋
         myTurn.value = false
+        //关闭悔棋
+        pieced.value = false 
+
       }     
     }
+    //悔棋
+    else if(temp.type === 208)
+    {      
+      // 需要同意方、、、、、、////
+      if(temp.data.ids.indexOf(ws.playerData.id) === -1) 
+      {       
+        showConfirmDialog({
+          message:'对方想要悔棋，元芳你怎么看？',
+          confirmButtonText : "放他一马",
+          cancelButtonText : "不要"
+        })
+          .then(() => {
+            if(myTurn.value === false) //同意方已经下棋了
+            {
+              agreeRegret()
+              regret()
+            }
+            else{
+              agreeRegret()
+              myTurn.value = false
+            }
+            pieced.value = false //同意了就没法悔棋
+          })
+          .catch(() => {
+            ws.sendMsg(JSON.stringify({type:109,data:{id:ws.playerData.id,isMyTurn:myTurn.value,agree:false}}))
+          });
+      }
+      //悔棋方、、、、、、////
+      if(temp.data.ids.indexOf(ws.playerData.id) !== -1)
+      {
+        if(temp.data.agree && myTurn.value === false) //对方还未下棋
+        {
+          regret()
+          myTurn.value = true
+        }
+        else if(temp.data.agree && myTurn.value === true) //对方已经下棋了
+        {
+          pieceNum.value[rivposi] = 0
+          lastpiece[rivposi] = false //清掉高亮特效
+          regret()
+          myTurn.value = true
+        }
+        else{
+          showToast({
+            message: '惨遭拒绝',
+            position: 'top',
+            duration: 6000
+          });
+        }
+      }
+    }
     //掉线
-    if(temp.type === 250)
+    else if(temp.type === 250)
     {
       showToast({
         message: 'You have been disconnected, please refresh and try again',
@@ -205,22 +285,15 @@ ws.onmessage  = function(e) {
 
 //标题栏逻辑
 const onClickLeft = () =>{
-  showConfirmDialog({
-  title: '温馨提示',
-  message:
-    '您确定退出吗？',
-})
-  .then(() => {
-    router.replace('/menu')
+const result = confirm("你确定退出吗？")
+if(result)
+{
+  router.replace('/menu')
     setTimeout(()=>{
       ws.sendMsg(JSON.stringify({type:101,data:{id:ws.playerData.id}}))
     },100)
-    })
-  .catch(() => {
-    // on cancel
-  });
 }
-
+}
 
 //下棋逻辑
 const play = (item:number) => {
@@ -228,12 +301,22 @@ const play = (item:number) => {
   const row = Math.floor(item / 13) + 1
   const col = item % 13
  
+  console.log(myTurn.value);
+
   // 我的回合
   if(myTurn.value === true)
-    ws.sendMsg(JSON.stringify({type:104,data:{id:ws.playerData.id,position:{x:row,y:col}}}))
+    if(pieceNum.value[posi.value] !== 1 && pieceNum.value[posi.value] !== 2)
+      ws.sendMsg(JSON.stringify({type:104,data:{id:ws.playerData.id,position:{x:row,y:col},no:xqNumber.value}}))
+    else
+      {
+        showToast({
+          message: '此处无法下棋',
+          icon: 'warn-o',
+          duration:5000
+      })
+      }
 }
   
-
 //点击了再来一局
 const again = () => {
   gameOver.value = false //消失再来一局
@@ -243,6 +326,16 @@ const again = () => {
     rivalshow.value = true
   
   ws.sendMsg(JSON.stringify({type:108,data:{id:ws.playerData.id}}))
+}
+
+//悔棋
+const repiece = () => {
+  //这是我的棋子的位置posi.value  
+  //这是对手的棋子位置 rivposi.value  
+  ws.sendMsg(JSON.stringify({type:109,data:{id:ws.playerData.id,isMyTurn:myTurn.value,agree:true}}))
+
+  //禁止重复点击
+  pieced.value = false
 }
 </script>
 
@@ -264,12 +357,12 @@ const again = () => {
   <!-- 用户和棋子 -->
   <div class="rival">
       <span>{{host?rival.name:ws.playerData.name}}
-        <van-tag :show="rivalshow" type="success">已准备</van-tag>
+        <van-tag :show="host?rivalshow:hostshow" type="success">已准备</van-tag>
       </span>
       <piece class="rivpiece" :piece-num="host?isFirst==1?2:1:isFirst"></piece>
   </div>
   <div class="me">
-      <span><van-tag :show="hostshow" type="success">已准备</van-tag>
+      <span><van-tag :show="host?hostshow:rivalshow" type="success">已准备</van-tag>
         {{host?ws.playerData.name : rival.name }}
       </span>
       <piece class="mepiece" :piece-num="host?isFirst:isFirst==1?2:1"></piece>
@@ -293,11 +386,14 @@ const again = () => {
         <div class="box2">
            <piece v-for="item in 169" :lastpiece="lastpiece[item]" :pieceNum ="pieceNum[item]" @click="play(item)"></piece>             
         </div>
+        <!-- 声音 -->
+        <audio ref="chessAudio" src="/piecevideo.mp3"></audio>
 
     </div>
         <div class="box1">
                       <!-- 游戏结束显示 -->
           <button class="btn" v-if="gameOver&&rival.id !== -1" @click="again">再来一局</button>
+          <button class="btn" v-else-if="!gameOver&&rival.id !== -1&& pieced" @click="repiece">悔棋</button>
         </div>
 </div>  
 </template>
