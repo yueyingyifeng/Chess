@@ -9,8 +9,7 @@ new Promise(async (resovle)=>{
     cws = new ChessWebSocket("ws:/192.168.1.161:9900");
 
     cws.onerror =(e) =>{
-        console.log(e);
-        
+        console.log(e);  
     }
     let state = await cws.isConnect();
     resovle(state);
@@ -27,7 +26,7 @@ new Promise(async (resovle)=>{
 });
 
 
-console.log("版本号: 1.0.1");
+console.log("版本号: 1.2.0");
 
 
 

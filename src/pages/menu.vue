@@ -3,10 +3,10 @@ import { inject,onMounted,reactive ,ref} from 'vue'
 import RoomList from "../components/menu_RoomList.vue";
 import PlayerList from "../components/menu_PlayerList.vue";
 import {ChessWebSocket} from "../tool/WebSocket"
-import 'vant/es/dialog/style'
 import { useRouter,useRoute } from 'vue-router'
-import { showNotify,showToast } from 'vant';
+import { showNotify,showToast,showDialog } from 'vant';
 import 'vant/es/notify/style';
+import 'vant/es/dialog/style'
 
 let getPlayerList  : Array<string>  = reactive([]);
 let getRoomList : Array<any> = reactive([]);
@@ -57,12 +57,14 @@ ws.onmessage  = function(e) {
     }
     else if(temp.type === 250)
     {
-      showToast({
-        message: 'You have been disconnected, please refresh and try again',
-        duration:0
+      showDialog({
+        title: '错误',
+        message: '掉线了兄dé',
+      }).then(() => {
+        location.reload();
       });
     }
-  }
+}
 
 
 onMounted(()=>{
@@ -121,6 +123,7 @@ function createRoom(){
 </script>
 
 <template>
+  <van-nav-bar title="五子棋" />
   <!-- 左边游戏列表 -->
   <div class="playertitle">玩家列表</div>
   <div class="left">

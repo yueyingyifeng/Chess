@@ -3,12 +3,14 @@ import piece from "../components/game/piece.vue"
 import {ref ,inject, type Ref} from 'vue'
 import { useRouter,useRoute, } from 'vue-router'
 import {ChessWebSocket} from "../tool/WebSocket"
-import { showToast,showConfirmDialog, showNotify, closeDialog } from 'vant';
+import { showToast,showConfirmDialog, showNotify, closeDialog,showDialog, type BarrageItem} from 'vant';
 const router = useRouter()
 const route = useRoute()
 let ws = inject("$ws") as ChessWebSocket;
 
 
+// 判断是否为 Windows
+const isWindows = /Windows/.test(navigator.userAgent);
 //接受此房间的房间号
 const RoomId:number = parseInt(route.query.id as string,10)
 // 判断是否是房主
@@ -17,8 +19,8 @@ const host : boolean = RoomId === ws.playerData.id
 const myTurn = ref(false)
 //落棋数组
 let pieceNum = ref([]) as Ref<number[]>;
-// // 游戏结束
-// let  = ref(false)
+// // 游戏开始
+let start = false
 // 是否结束了游戏
 const gameOver = ref(false)  
 // 我下棋的位置
@@ -42,6 +44,9 @@ const xqNumber = ref(0)
 // 房主和对手的准备
 let hostshow = ref(false)
 let rivalshow = ref(false)
+//记录所有的棋子
+let Allpiece: number[] = []
+let index = -1
 //不是房主，获得房主信息
 if(!host) 
 {
@@ -63,7 +68,11 @@ function first() {
             ws.sendMsg(JSON.stringify({type:106,data:{id:ws.playerData.id,whoFirst:true}}))
             isFirst.value = 1
             myTurn.value = true
-            showToast('Show Time')
+            showToast({
+            message: 'show Time',
+            position: 'top',
+            duration: 6000
+            });
           })
           .catch(() => {
             ws.sendMsg(JSON.stringify({type:106,data:{id:ws.playerData.id,whoFirst:false}}))
@@ -73,17 +82,22 @@ function first() {
 }
 //封装 -- 悔自己的棋子
 const regret = () => {
-  pieceNum.value[posi.value] = 0
-    showToast({
-      message: '悔棋成功',
-      position: 'top',
-      duration: 6000
-    });
+  pieceNum.value[Allpiece[index--]] = 0
+  Allpiece.pop()
+
+  showToast({
+    message: '悔棋成功',
+    position: 'top',
+    duration: 6000
+  });
 }
 //封装 -- 同意悔棋，发请求，去掉别人的棋子
 const agreeRegret = () => {
   ws.sendMsg(JSON.stringify({type:109,data:{id:ws.playerData.id,isMyTurn:myTurn.value,agree:true}}))
-  pieceNum.value[rivposi] = 0
+  
+  pieceNum.value[Allpiece[index--]] = 0
+  Allpiece.pop()
+
   lastpiece[rivposi] = false //清掉高亮特效
 }
 //接收服务器
@@ -94,11 +108,13 @@ ws.onmessage  = function(e) {
     //是否有人进入房间     
     if(temp.type === 204) //只有房主能收到
     {
+      pieced.value = false  //禁止重复点击
       rival.value = temp.data
     if(rival.value.id !== -1)
     {          
       //有人进来后，房主选择谁先手，谁后手
       first()
+      start = true
     }
     }
     //下棋是否被允许
@@ -106,11 +122,21 @@ ws.onmessage  = function(e) {
     {
       if(temp.accept === true) 
       {
-        pieceNum.value[posi.value] = isFirst.value
         myTurn.value = false
+        pieceNum.value[posi.value] = isFirst.value
         lastpiece[rivposi] = false //关闭对手的呼吸效果
-        chessAudio.value.play()//播放声音
+        // chessAudio.value.play()//播放声音*************************************
 
+        //棋子进栈
+        if(Allpiece.indexOf(posi.value) === -1)
+        {
+          Allpiece.push(posi.value)
+          index++
+          console.log(Allpiece);
+          console.log(index);
+          
+        }
+        
         pieced.value = true //可以进行悔棋了
       }
       else{ 
@@ -131,8 +157,15 @@ ws.onmessage  = function(e) {
       rivposi  = (temp.data.position.x -1)*13 + temp.data.position.y
       pieceNum.value[rivposi] = isFirst.value == 1? 2:1
       lastpiece[rivposi] = true
-      chessAudio.value.play()//播放声音
+      // chessAudio.value.play()//播放声音****************************************  
       myTurn.value = true
+
+       //棋子进栈
+      if(Allpiece.indexOf(rivposi) === -1)
+        {
+          Allpiece.push(rivposi)
+          index++
+        }
     }
     //对手收到是否先手
     else if(temp.type === 203) //非房主接受
@@ -144,10 +177,13 @@ ws.onmessage  = function(e) {
         message: '我方先手下棋',
         duration: 5000
       });
+      start = true
     }
     //判断获胜
     else if(temp.type === 233)
     {      
+      start = false
+      Allpiece = [] //清空记录的棋子
       myTurn.value = false
       gameOver.value = true
       if(temp.winningId === ws.playerData.id)// 这个必不会阻塞，因为这个棋子是你自己下的
@@ -251,7 +287,8 @@ ws.onmessage  = function(e) {
       }
       //悔棋方、、、、、、////
       if(temp.data.ids.indexOf(ws.playerData.id) !== -1)
-      {
+      {        
+        pieced.value = true //点击悔棋后暂时不显示，收到消息后显示
         if(temp.data.agree && myTurn.value === false) //对方还未下棋
         {
           regret()
@@ -259,9 +296,12 @@ ws.onmessage  = function(e) {
         }
         else if(temp.data.agree && myTurn.value === true) //对方已经下棋了
         {
-          pieceNum.value[rivposi] = 0
-          lastpiece[rivposi] = false //清掉高亮特效
           regret()
+          // pieceNum.value[rivposi] = 0
+          pieceNum.value[Allpiece[index--]] = 0
+          Allpiece.pop()
+
+          lastpiece[rivposi] = false //清掉高亮特效
           myTurn.value = true
         }
         else{
@@ -271,14 +311,32 @@ ws.onmessage  = function(e) {
             duration: 6000
           });
         }
+        console.log(Allpiece);
+        //如果棋盘上没有了自己的棋子，就禁止悔棋
+        if(host)
+        {
+          if(Allpiece.length === 0)
+            pieced.value = false ////禁止悔棋
+        }
+        else{
+          if(Allpiece.length === 1)
+            pieced.value = false ////禁止悔棋
+        }
       }
+    }
+    //聊天
+    else if(temp.type === 209)
+    {
+      danmulist.value.push({id:Math.random(),text : temp.data.text}) 
     }
     //掉线
     else if(temp.type === 250)
     {
-      showToast({
-        message: 'You have been disconnected, please refresh and try again',
-        duration:0
+      showDialog({
+        title: '错误',
+        message: '掉线了兄dé',
+      }).then(() => {
+        location.reload();
       });
     }
 }
@@ -297,14 +355,12 @@ if(result)
 
 //下棋逻辑
 const play = (item:number) => {
-  posi.value = item
-  const row = Math.floor(item / 13) + 1
-  const col = item % 13
- 
-  console.log(myTurn.value);
-
   // 我的回合
   if(myTurn.value === true)
+  {
+    posi.value = item
+    const row = Math.floor(item / 13) + 1
+    const col = item % 13
     if(pieceNum.value[posi.value] !== 1 && pieceNum.value[posi.value] !== 2)
       ws.sendMsg(JSON.stringify({type:104,data:{id:ws.playerData.id,position:{x:row,y:col},no:xqNumber.value}}))
     else
@@ -315,11 +371,13 @@ const play = (item:number) => {
           duration:5000
       })
       }
+  }
 }
   
 //点击了再来一局
 const again = () => {
   gameOver.value = false //消失再来一局
+  pieced.value = false
   if(host)
     hostshow.value = true 
   else
@@ -333,9 +391,25 @@ const repiece = () => {
   //这是我的棋子的位置posi.value  
   //这是对手的棋子位置 rivposi.value  
   ws.sendMsg(JSON.stringify({type:109,data:{id:ws.playerData.id,isMyTurn:myTurn.value,agree:true}}))
+    pieced.value = false  //禁止重复点击
+}
 
-  //禁止重复点击
-  pieced.value = false
+//弹幕内容
+const danmulist  = ref([{text:'欢迎进入房间~✨'}]) as Ref<BarrageItem[]>
+//使在80px，40%的位置
+const anchors = [
+      80,
+      Math.round(0.4 * window.innerHeight),
+      // Math.round(0.7 * window.innerHeight),
+    ];
+const height = ref(anchors[0]);
+const danmu = ref('')
+
+//发送弹幕
+const sendDanmu = () => {
+  height.value = anchors[0]
+  ws.sendMsg(JSON.stringify({type:110,data:{id:ws.playerData.id,text:danmu.value}}))
+  danmu.value = ''
 }
 </script>
 
@@ -354,6 +428,11 @@ const repiece = () => {
       :fixed="true"
     />
   </div>
+  
+  <div class="huihe" v-if="start">
+    <van-tag  type="primary" v-if="myTurn">我方回合</van-tag>
+    <van-tag  type="primary" v-else>对方回合</van-tag>
+  </div>
   <!-- 用户和棋子 -->
   <div class="rival">
       <span>{{host?rival.name:ws.playerData.name}}
@@ -367,7 +446,6 @@ const repiece = () => {
       </span>
       <piece class="mepiece" :piece-num="host?isFirst:isFirst==1?2:1"></piece>
   </div>
-
 
   <!-- 棋盘 -->
   <div class="box">
@@ -387,22 +465,49 @@ const repiece = () => {
            <piece v-for="item in 169" :lastpiece="lastpiece[item]" :pieceNum ="pieceNum[item]" @click="play(item)"></piece>             
         </div>
         <!-- 声音 -->
-        <audio ref="chessAudio" src="/piecevideo.mp3"></audio>
+        <!-- <audio ref="chessAudio" src="/piecevideo.mp3"></audio> -->
 
-    </div>
-        <div class="box1">
-                      <!-- 游戏结束显示 -->
-          <button class="btn" v-if="gameOver&&rival.id !== -1" @click="again">再来一局</button>
-          <button class="btn" v-else-if="!gameOver&&rival.id !== -1&& pieced" @click="repiece">悔棋</button>
-        </div>
+  </div>
+  <div class="box1">
+<!-- 游戏结束显示 -->
+    <button class="btn" v-if="gameOver&&rival.id !== -1" @click="again">再来一局</button>
+    <button class="btn" v-else-if="!gameOver&&rival.id !== -1&& pieced" @click="repiece">悔棋</button>
+  </div>
+
+  <!-- 输入框 -->
+  <van-floating-panel v-model:height="height" :anchors="anchors">
+  <div style="text-align: center;margin-top: -10px;" >
+    <p @click="height = anchors[1]">发送弹幕</p>
+    <van-cell-group inset> 
+      <van-field v-model="danmu" label="弹幕" placeholder="请输入你发送的内容" clickable/>
+    </van-cell-group>
+
+  <button class="btn" v-if="isWindows && danmu === ''" @click="height = 80" style="margin-top: 46px;" >取消</button>
+  <button class="btn" v-else @click="sendDanmu" style="margin-top: 46px;" >发送</button>
+  </div>
+  </van-floating-panel>
+
+  <!-- 弹幕 -->
+  <van-barrage v-model="danmulist" class="danmu" style="width: 100%;">
+     <div class="video" auto-play style="width: 100%; height: 150px" ></div>
+  </van-barrage>
 </div>  
 </template>
 
 <style scoped>
+.danmu{
+    float: left;
+    width: 100%;
+    height: 150px;
+    position: absolute;
+    top: 46px;
+    left: 0px;
+}
 .box{
   margin:0 auto;
   width:375px ;
   position: relative;
+  overflow-x: hidden;
 }
 .t1{
    border: 5px solid #030303;
@@ -459,8 +564,8 @@ const repiece = () => {
   grid-template-rows: repeat(13, 26px); 
   border: 0px solid red;
   position: absolute;
-  top:17px;
-  left: 16px;
+  top:27px;
+  left: 17px;
 }
 .rival{
   width: 175px;
@@ -488,5 +593,12 @@ const repiece = () => {
   position: absolute;
   right: 5px;
   margin-top: 5px;
+}
+.huihe{
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 </style>
