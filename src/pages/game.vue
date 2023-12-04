@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import piece from "../components/game/piece.vue"
-import {ref ,inject, type Ref} from 'vue'
+import piece from '../components/game/piece.vue'
+import {ref ,inject, type Ref, watch} from 'vue'
 import { useRouter,useRoute, } from 'vue-router'
 import {ChessWebSocket} from "../tool/WebSocket"
 import { showToast,showConfirmDialog, showNotify, closeDialog,showDialog, type BarrageItem} from 'vant';
@@ -18,7 +18,7 @@ const host : boolean = RoomId === ws.playerData.id
 // 当状态为true时，表示我方回合，启动点击事件
 const myTurn = ref(false)
 //落棋数组
-let pieceNum = ref([]) as Ref<number[]>;
+let pieceNum = ref([]) as Ref<number[]>
 // // 游戏开始
 let start = false
 // 是否结束了游戏
@@ -93,15 +93,15 @@ const regret = () => {
 }
 //封装 -- 同意悔棋，发请求，去掉别人的棋子
 const agreeRegret = () => {
-  ws.sendMsg(JSON.stringify({type:109,data:{id:ws.playerData.id,isMyTurn:myTurn.value,agree:true}}))
-  
+  ws.sendMsg(JSON.stringify({type:109,data:{id:ws.playerData.id,isMyTurn:myTurn.value,agree:true,isAccepter:true}}))
+
   pieceNum.value[Allpiece[index--]] = 0
   Allpiece.pop()
 
   lastpiece[rivposi] = false //清掉高亮特效
 }
 //接收服务器
-ws.onmessage  = function(e) {
+ws.onmessage  = async function(e) {
   const temp = JSON.parse(e.data); 
     console.log("game",temp);
 
@@ -120,23 +120,20 @@ ws.onmessage  = function(e) {
     //下棋是否被允许
     else if(temp.type === 234) 
     {
+      if(gameOver.value) return
       if(temp.accept === true) 
       {
         myTurn.value = false
         pieceNum.value[posi.value] = isFirst.value
         lastpiece[rivposi] = false //关闭对手的呼吸效果
-        // chessAudio.value.play()//播放声音*************************************
+        chessAudio.value.play()//播放声音*************************************
 
         //棋子进栈
         if(Allpiece.indexOf(posi.value) === -1)
         {
           Allpiece.push(posi.value)
           index++
-          console.log(Allpiece);
-          console.log(index);
-          
         }
-        
         pieced.value = true //可以进行悔棋了
       }
       else{ 
@@ -151,21 +148,21 @@ ws.onmessage  = function(e) {
     }
     //收到对方下棋
     else if(temp.type === 205)
-    {      
+    {     
       xqNumber.value = temp.data.no + 1
       lastpiece[rivposi] = false
       rivposi  = (temp.data.position.x -1)*13 + temp.data.position.y
       pieceNum.value[rivposi] = isFirst.value == 1? 2:1
       lastpiece[rivposi] = true
-      // chessAudio.value.play()//播放声音****************************************  
-      myTurn.value = true
-
-       //棋子进栈
+      chessAudio.value.play()//播放声音****************************************  
+      
+      //棋子进栈
       if(Allpiece.indexOf(rivposi) === -1)
         {
           Allpiece.push(rivposi)
           index++
         }
+      myTurn.value = true
     }
     //对手收到是否先手
     else if(temp.type === 203) //非房主接受
@@ -181,26 +178,29 @@ ws.onmessage  = function(e) {
     }
     //判断获胜
     else if(temp.type === 233)
-    {      
-      start = false
-      Allpiece = [] //清空记录的棋子
-      myTurn.value = false
+    {    
       gameOver.value = true
-      if(temp.winningId === ws.playerData.id)// 这个必不会阻塞，因为这个棋子是你自己下的
-      {
-        alert('牛逼')
-      }
-      else {
-        setTimeout(()=>{
-          fail.value++
-          if(fail.value == 3) 
+
+      new Promise((resolve) => {
+        setTimeout(() => {
+            resolve(e)
+        },1000);
+      })
+      .then(()=>{
+        start = false
+        if(temp.winningId === ws.playerData.id)
+          alert('牛逼')
+        else{
+          myTurn.value = false
+          fail.value ++
+          if(fail.value % 3 === 0) 
           {
             alert('这小子指定是开挂了')
             return
           } 
           alert('输了耶，再干他一次试试？')
-          },500)
-      }
+        }
+      })
     }
      //房主离开房间开了
     else if(temp.type === 206)
@@ -242,6 +242,8 @@ ws.onmessage  = function(e) {
       {
         //清空棋盘
         pieceNum.value = [] as any
+        Allpiece = [] //清空记录的棋子
+        index = -1
         //提示游戏开始
         showNotify({ type: 'primary', message: '游戏开始' })
         //清空了还需要把最后一个棋子的呼吸效果去掉
@@ -255,7 +257,6 @@ ws.onmessage  = function(e) {
         myTurn.value = false
         //关闭悔棋
         pieced.value = false 
-
       }     
     }
     //悔棋
@@ -279,10 +280,19 @@ ws.onmessage  = function(e) {
               agreeRegret()
               myTurn.value = false
             }
-            pieced.value = false //同意了就没法悔棋
+            //如果棋盘上没有了自己的棋子，就禁止悔棋
+            if(isFirst.value === 1)
+            {
+              if(Allpiece.length === 0)
+                pieced.value = false ////禁止悔棋
+            }
+            else if(Allpiece.length === 1 || Allpiece.length === 0)
+            {
+              pieced.value = false ////禁止悔棋
+            }
           })
           .catch(() => {
-            ws.sendMsg(JSON.stringify({type:109,data:{id:ws.playerData.id,isMyTurn:myTurn.value,agree:false}}))
+            ws.sendMsg(JSON.stringify({type:109,data:{id:ws.playerData.id,isMyTurn:myTurn.value,agree:false,isAccepter:true}}))
           });
       }
       //悔棋方、、、、、、////
@@ -311,17 +321,16 @@ ws.onmessage  = function(e) {
             duration: 6000
           });
         }
-        console.log(Allpiece);
-        //如果棋盘上没有了自己的棋子，就禁止悔棋
-        if(host)
-        {
-          if(Allpiece.length === 0)
-            pieced.value = false ////禁止悔棋
-        }
-        else{
-          if(Allpiece.length === 1)
-            pieced.value = false ////禁止悔棋
-        }
+      }
+      //如果棋盘上没有了自己的棋子，就禁止悔棋
+      if(isFirst.value === 1)
+      {
+        if(Allpiece.length === 0)
+          pieced.value = false ////禁止悔棋
+      }
+      else if(Allpiece.length === 1 || Allpiece.length === 0)
+      {
+        pieced.value = false ////禁止悔棋
       }
     }
     //聊天
@@ -340,6 +349,7 @@ ws.onmessage  = function(e) {
       });
     }
 }
+
 
 //标题栏逻辑
 const onClickLeft = () =>{
@@ -390,12 +400,11 @@ const again = () => {
 const repiece = () => {
   //这是我的棋子的位置posi.value  
   //这是对手的棋子位置 rivposi.value  
-  ws.sendMsg(JSON.stringify({type:109,data:{id:ws.playerData.id,isMyTurn:myTurn.value,agree:true}}))
+  ws.sendMsg(JSON.stringify({type:109,data:{id:ws.playerData.id,isMyTurn:myTurn.value,agree:true,isAccepter:false}}))
     pieced.value = false  //禁止重复点击
 }
 
-//弹幕内容
-const danmulist  = ref([{text:'欢迎进入房间~✨'}]) as Ref<BarrageItem[]>
+
 //使在80px，40%的位置
 const anchors = [
       80,
@@ -404,13 +413,32 @@ const anchors = [
     ];
 const height = ref(anchors[0]);
 const danmu = ref('')
-
+//弹幕内容
+const danmulist  = ref([{text:'欢迎进入房间~✨'}]) as Ref<BarrageItem[]>
 //发送弹幕
 const sendDanmu = () => {
   height.value = anchors[0]
-  ws.sendMsg(JSON.stringify({type:110,data:{id:ws.playerData.id,text:danmu.value}}))
-  danmu.value = ''
+  if(danmu.value !== '')
+  {
+    ws.sendMsg(JSON.stringify({type:110,data:{id:ws.playerData.id,text:danmu.value}}))
+    danmu.value = ''
+  } 
 }
+
+
+watch(()=>Allpiece.length,()=>{
+  console.log('棋子',Allpiece);
+  
+  if(isFirst.value === 1)//先手
+  {
+    if(Allpiece.length === 0)
+        pieced.value = false ////禁止悔棋
+  }
+  if(Allpiece.length === 1 || Allpiece.length === 0)
+  {
+    pieced.value = false ////禁止悔棋
+  }
+})
 </script>
 
 
@@ -465,13 +493,13 @@ const sendDanmu = () => {
            <piece v-for="item in 169" :lastpiece="lastpiece[item]" :pieceNum ="pieceNum[item]" @click="play(item)"></piece>             
         </div>
         <!-- 声音 -->
-        <!-- <audio ref="chessAudio" src="/piecevideo.mp3"></audio> -->
+        <audio ref="chessAudio" src="/piecevideo.mp3"></audio>
 
   </div>
   <div class="box1">
 <!-- 游戏结束显示 -->
     <button class="btn" v-if="gameOver&&rival.id !== -1" @click="again">再来一局</button>
-    <button class="btn" v-else-if="!gameOver&&rival.id !== -1&& pieced" @click="repiece">悔棋</button>
+    <!-- <button class="btn" v-else-if="!gameOver&&rival.id !== -1&& pieced" @click="repiece">悔棋</button> -->
   </div>
 
   <!-- 输入框 -->
@@ -479,7 +507,7 @@ const sendDanmu = () => {
   <div style="text-align: center;margin-top: -10px;" >
     <p @click="height = anchors[1]">发送弹幕</p>
     <van-cell-group inset> 
-      <van-field v-model="danmu" label="弹幕" placeholder="请输入你发送的内容" clickable/>
+      <van-field v-model="danmu" label="弹幕" placeholder="请输入你发送的内容" clickable @keyup.enter="sendDanmu"/>
     </van-cell-group>
 
   <button class="btn" v-if="isWindows && danmu === ''" @click="height = 80" style="margin-top: 46px;" >取消</button>
@@ -517,6 +545,19 @@ const sendDanmu = () => {
    border-collapse:collapse; 
    margin: 10px 0 0 0;
    position: relative;
+   /* 动画 */
+   opacity: 0;
+   animation: fadeInUp 1s ease-out forwards
+}
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 .h1{
   border: 1px solid #000;
@@ -574,6 +615,17 @@ const sendDanmu = () => {
   left: 0;
   top: 75px;
   align-items: center;
+  animation: fadeInUpri 1s ease-out forwards;
+}
+@keyframes fadeInUpri {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 .me{
   width: 175px;
@@ -583,6 +635,17 @@ const sendDanmu = () => {
   top: 75px;
   text-align: right;
   margin-bottom: 10px ;
+  animation: fadeInUpme 1s ease-out forwards;
+}
+@keyframes fadeInUpme {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 .rivpiece{
   position: absolute;

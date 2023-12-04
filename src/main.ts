@@ -6,7 +6,7 @@ import router from './router/index.js'
 
 let cws : ChessWebSocket; 
 new Promise(async (resovle)=>{
-    cws = new ChessWebSocket("ws:/192.168.1.161:9900");
+    cws = new ChessWebSocket("ws:/120.24.177.154:9900");
 
     cws.onerror =(e) =>{
         console.log(e);  

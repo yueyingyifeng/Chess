@@ -12,6 +12,7 @@ let getPlayerList  : Array<string>  = reactive([]);
 let getRoomList : Array<any> = reactive([]);
 let ws = inject("$ws") as ChessWebSocket;
 const route = useRoute()
+
 //接受进入房间的数据
 const item = ref()
 const addroomData = (e : object) => {
@@ -21,7 +22,7 @@ const addroomData = (e : object) => {
 // 接受服务器的数据
 ws.onmessage  = function(e) {
     const temp = JSON.parse(e.data);   
-    // console.log("menu:",temp);
+    console.log("menu:",temp);
               
     if(temp.type == 202){ // 玩家列表
       getPlayerList.values = temp.data;
@@ -71,7 +72,6 @@ onMounted(()=>{
     setTimeout(()=>{
           //打印出你的id
           // console.log("我的id = ",ws.playerData.id)
-          // console.log("在线玩家数量",getPlayerList.values.length);
           
           //获取list
           if(getPlayerList.values.length === 0)
@@ -79,17 +79,15 @@ onMounted(()=>{
           //id获取失败
           if(ws.playerData.id === -1)
             showNotify({ type: 'danger', message: 'ID获取失败'});
-    },700)
+    },5000)
 
 
     window.addEventListener("beforeunload",(e)=>{
       e = e || window.event;
         if (e) {
-            e.returnValue = '关闭提示';
-            
+            e.returnValue = '关闭提示';           
         }
         return true;
-
     });
 
     window.addEventListener("unload",e=>{
@@ -103,8 +101,6 @@ onMounted(()=>{
               }
             };
             ws.send(JSON.stringify(json));
-          
-
     })
   }
 )

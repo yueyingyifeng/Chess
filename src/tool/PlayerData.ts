@@ -11,7 +11,7 @@ export class PlayerData{
             this.name = this.name.substring(0,5);
         }
         
-        if(this.name == null)
+        if(this.name == null || this.name === '')
             this.name = "害羞鬼";
     }
 }
